@@ -1,0 +1,189 @@
+\documentclass{article}
+
+\usepackage{rotating}
+\usepackage{graphics}
+\usepackage{latexsym}
+\usepackage{color}
+\usepackage{listings} % allows for importing code scripts into the tex file
+\usepackage{wrapfig} % allows wrapping text around a figure
+\usepackage{lipsum} % provides Latin text to fill up a page in this illustration (do not need it otherwise!)
+
+% Approximately 1 inch borders all around
+\setlength\topmargin{-.56in}
+\setlength\evensidemargin{0in}
+\setlength\oddsidemargin{0in}
+\setlength\textwidth{6.49in}
+\setlength\textheight{8.6in}
+
+% Options for code listing; from Patrick DeJesus, October 2016
+\definecolor{codegreen}{rgb}{0,0.6,0}
+\definecolor{codegray}{rgb}{0.5,0.5,0.5}
+\definecolor{codepurple}{rgb}{0.58,0,0.82}
+\definecolor{backcolour}{rgb}{0.95,0.95,0.92}
+\lstdefinestyle{mystyle}{
+	backgroundcolor=\color{backcolour},   commentstyle=\color{codegreen},
+	keywordstyle=\color{magenta},
+	numberstyle=\tiny\color{codegray},
+	stringstyle=\color{codepurple},
+	basicstyle=\footnotesize,
+	breakatwhitespace=false,         
+	breaklines=true,                 
+	captionpos=b,                    
+	keepspaces=true,                 
+	numbers=left,                    
+	numbersep=5pt,                  
+	showspaces=false,                
+	showstringspaces=false,
+	showtabs=false,                  
+	tabsize=2
+}
+
+%"mystyle" code listing set
+\lstset{style=mystyle}
+%\lstset{inputpath=appendix/}
+
+
+\title{Salaries of Baseball Players} 
+\author{Kelso Quan}
+
+
+\begin{document} 
+<<Set up, include = F, echo = F>>=
+library(ISLR)
+library(MASS)
+library(corrplot)
+library(car)
+library(KernSmooth)
+library(leaps)
+library(xtable)
+library(foreach)
+library(randomForest)
+library(glmnet) 
+library(tree)
+sum(is.na(Hitters))
+
+Hitters2<-na.omit(Hitters)
+
+head(Hitters2)
+names(Hitters2)
+
+attach(Hitters2)
+lSalary = log(Salary)
+lCWalks<-log(CWalks)
+lCHits <-log(CHits)
+lCRuns <-log(CRuns)
+lCAtBat <-log(CAtBat)
+lCRBI <- log(CRBI)
+lYears <-log(Years)
+lCHmRun <-log(CHmRun)
+@
+\maketitle
+\begin{center}
+\Large{Abstract}
+\end{center}
+Determining one's salary in baseball is a finicky game. There many be algorithms that the MLB uses, but this analysis is trying to develop ways in predicting a baseball player's salary based on their statistics and attributes. Using linear regression, lasso, and bagging, the analysis determined that the bagging without bootstrap method had the lowest MSE, but regression had a similar MSE. A sufficient method would be linear regression, but if the club owner is being frugal about their money, then bagging without bootstrap method would yield slightly better results. 
+\section{Introduction}
+\qquad Baseball, an American pastime, is a complex sports game. There are so many movies on baseball. Money ball is a recent movie which delves into the salaries of baseball players. The general manager of the Oakland A's was faced with a tight budget where he must reinvent his team by outsmarting the richer ball clubs. In 1968, Baseball in America was going through organizational changes. Leagues were changed and Divisions were created within those leagues. In this day and age of baseball, players are becoming more and more expensive with their ever larger salaries. It would be useful for sport stats enthusiasts and club owners to see how much their players are worth and predict how much a player may truly be worth. The analysis will be using three methods: regression, lasso, bagging. 
+
+\section{Methods}
+\qquad The data was taken in 1986 with 322 observations. There were 59 observations that were omitted because those cases had 'na' values. For those who do not know baseball statistics: AtBat is the number of times at bat, HmRun is the number of home runs, Runs is the number of runs, RBI is the number of runs batted in, Walks is the number of walks, Years is number of years in the major leagues, CAtBat is the number of times at bat during his career, CHits number of hits during his career, CHmRun is number of home runs during his career, CRuns is number of runs during his career, CRBI is number of runs batted in during career, CWalks is number of walks during his career, League has two factors American and National league, Division has two factors East and West, PutOuts is number of put outs, Assists is the number of assists, Errors is the number of errors, Salary is annual salary on opening day in thousands of dollars in 1987, NewLeague is a factor with American and National indicating the player's league at the beginning of 1987. 
+The analysis was done in R/RStudio.
+
+\section{Results}
+\subsection{Exploratory Data Analysis}
+\begin{figure}
+\centering
+\caption{BoxCox transformation on Salary}
+\label{boxcox}
+<<BoxCox, echo = F, out.height = "50%", out.width = "50%">>=
+bc1 <- boxcox(Salary~., data = Hitters2)
+bc1$x[bc1$y==max(bc1$y)]
+@
+\end{figure}
+\qquad A boxcox transformation showed that the Salary had to be log transformed. Figure \ref{boxcox} shows that $\lambda$ is close to zero which is an indication that the response should be log transformed. Creating a histogram for the response confirmed that salary indeed needed to be log transformed. Then histogram of every covariate must be made to see if they are skewed. If so, the variable may be log transformed to better fit the model. Not every predictor variable had to be log transformed. Univariate analysis was done between single variables and the response to better understand the significance between that covariate and the response. To further see correlation between the response and predictor variables, a correlation matrix was created. Figure \ref{corrplot} shows that most variables are correlated to the response with the exception of League, Assists, Errors, and NewLeague. Division was the only variable that was negatively correlated to Salary.
+
+\subsection{Model Fitting/Inferences}
+\qquad A model was tested to see if all linear terms without transformation was possible. The residual plots looked terrible. Then a model with the log transformed response and a couple of necessarily log transformed predictors along with non transformed predictors made a decent model. The regression model without interaction terms included:  Runs, log(CHits), Division, and PutOuts. This model was found by the stepAIC function with both directions, then insignificant terms were eliminated one at a time.
+
+\qquad The regression model with interaction terms included: AtBat, HmRun, RBI, log(CRuns), PutOuts, Assists, Errors, AtBat:Walks, AtBat:log(CHits), HmRun:log(CHits), HmRun:League, RBI:League, RBI:Errors, log(CHits):log(CRuns), log(CHits):League, log(CHits):Assists, log(CHits:Errors), log(CHits):NewLeague, log(CRuns):League, log(CRuns):NewLeague, Division:Assists, PutOuts:Assists, and League:Putouts. This model was found by the stepAIC function with both directions, then insignificant terms were eliminated one at a time. The qq plot for the model looked normal enough. 
+After looking at these regression models, the analysis proceeded to train data for the lasso and bagging methods. The training data was half of the data. 
+
+\qquad Plotting the points for the bagging and no bootstrap bagging showed that the errors were random. By strictly looking at the MSE of all three methods, bagging with no bootstrap was better. There were three potential outliers: Mike Schmidt, Steve Balboni, and Terry Kennedy.
+\section{Conclusion}
+\qquad The best method was no bootstrap bagging. It had the lowest MSE compared to the other methods. Table \ref{mse} shows that Bagging without bootstrap had the lowest MSE. But in terms of ease and interpretability, linear regression is good enough. Club owners should be happy with the linear regression model, but if not, they should go for Bagging No Bootstrap method. 
+This analysis was limited to the regression, bagging, and lasso methods. Perhaps, ridge regression may have been explored. Random Forest was also looked into during this analysis, but was not considered. But it turns out that random forest is the best method in terms of low MSE.  
+\begin{table}[ht]
+\caption{Comparing MSE by Methods}
+\label{mse}
+\centering
+\begin{tabular}{rccc}
+  \hline
+ & Regression & Bagging & No Bootstrap  \\ 
+  \hline
+MSE & 0.38 & 0.37 & 0.36 \\ 
+   \hline
+\end{tabular}
+\end{table}
+
+\newpage
+\noindent \Large{{\bf Appendix A: Auxiliary Graphics and Tables}}
+
+\begin{figure}
+\centering
+\label{corrplot}
+\caption{Correlation Matrix between all Variables}
+<<Corr Matrix, echo = F, out.height = "50%", out.width = "50%">>=
+Hitters2vars = data.frame(as.numeric(Salary), as.numeric(Hits), as.numeric(RBI), as.numeric(Walks), 
+                          as.numeric(Years), as.numeric(CAtBat), as.numeric(CRuns), as.numeric(CRBI), 
+                          as.numeric(CWalks), as.numeric(League), as.numeric(Division), 
+                          as.numeric(PutOuts),as.numeric(AtBat), as.numeric(HmRun), as.numeric(Runs), 
+                          as.numeric(Assists), as.numeric(CHits), as.numeric(CHmRun), as.numeric(Errors),                           as.numeric(NewLeague))
+Hit2var = cor(Hitters2vars)
+corrplot(Hit2var)
+@
+\end{figure}
+\begin{figure}
+\centering
+\label{hist}
+\caption{Histograms of untransformed variables}
+<<Histograms, echo = F>>=
+par(mfrow = c(4,2))
+hist(AtBat)
+hist(Salary)
+hist(RBI)
+hist(AtBat)
+hist(CHits)
+hist(CWalks)
+hist(Assists)
+hist(Hits)
+@
+
+<<Hist, echo = F>>=
+par(mfrow = c(4,2))
+hist(Walks)
+hist(CHmRun)
+hist(Errors)
+hist(HmRun)
+hist(Years)
+hist(CRuns)
+hist(Runs)
+hist(CAtBat)
+hist(CRBI)
+hist(PutOuts)
+par(mfrow = c(1,1))
+@
+\end{figure}
+
+\begin{table}
+\centering
+\caption{VIF of Regression Model without Interaction terms}
+\begin{tabular}{cccc}
+Runs & lCHits & Division & PutOuts \\ \hline
+1.25 & 1.15 & 1.01 & 1.08 \\
+\end{tabular}
+\end{table}
+
+\newpage
+\noindent \Large{{\bf Appendix B: R Code}}
+\lstinputlisting[language=R, caption = Baseball Salary]{hitter.R}
+\end{document}
